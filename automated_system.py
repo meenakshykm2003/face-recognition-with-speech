@@ -31,16 +31,24 @@ print(f"Using device: {device}")
 
 # Initialize Text-to-Speech Engine
 tts_engine = pyttsx3.init()
-tts_engine.setProperty('rate', 150)  # Speed of speech
-tts_engine.setProperty('volume', 1.0)  # Volume (0.0 to 1.0)
+tts_engine.setProperty('rate', 120)  # Slower speed of speech
+tts_engine.setProperty('volume', 0.9)  # Slightly softer volume
 
 def speak_async(text):
     """Speak text asynchronously to avoid blocking the main thread"""
     def _speak():
         try:
             engine = pyttsx3.init()
-            engine.setProperty('rate', 150)
-            engine.setProperty('volume', 1.0)
+            engine.setProperty('rate', 120)  # Slower, more soothing pace
+            engine.setProperty('volume', 0.9)  # Slightly softer
+            
+            # Try to use a softer/female voice if available (Windows: Zira)
+            voices = engine.getProperty('voices')
+            for voice in voices:
+                if 'zira' in voice.name.lower() or 'female' in voice.name.lower():
+                    engine.setProperty('voice', voice.id)
+                    break
+            
             engine.say(text)
             engine.runAndWait()
         except Exception as e:
@@ -49,8 +57,8 @@ def speak_async(text):
     thread = threading.Thread(target=_speak, daemon=True)
     thread.start()
 
-# Initialize models
-detector = MTCNN(keep_all=True, select_largest=False, device=device, min_face_size=80)
+# Initialize models (min_face_size=40 for detecting faces from farther away)
+detector = MTCNN(keep_all=True, select_largest=False, device=device, min_face_size=40)
 resnet = InceptionResnetV1(pretrained='vggface2').eval().to(device)
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
@@ -70,12 +78,12 @@ class AutomatedFaceRecognitionSystem:
         # Initialize Face Recognition Model
         self.face_model = FaceRecognitionModel(similarity_threshold=0.7)
         
-        # Timing settings (REDUCED for faster capture)
-        self.stable_frames_required = 8   # ~0.25 seconds at 30fps
-        self.countdown_seconds = 1.5      # 1.5 second countdown
-        self.min_face_size = 80           # Allow smaller faces
-        self.cooldown_seconds = 3         # 3 second cooldown
-        self.frame_skip = 3               # Process every 3rd frame
+        # Timing settings (FAST - for walking people)
+        self.stable_frames_required = 3   # ~0.1 seconds at 30fps (very fast)
+        self.countdown_seconds = 0.3      # 0.3 second countdown (instant)
+        self.min_face_size = 60           # Detect smaller/distant faces
+        self.cooldown_seconds = 1         # 1 second cooldown
+        self.frame_skip = 1               # Process every frame
         
         # State tracking
         self.stable_frame_count = 0
@@ -93,8 +101,8 @@ class AutomatedFaceRecognitionSystem:
         """Calculate center point of face bounding box"""
         return (x + w // 2, y + h // 2)
     
-    def _is_same_face(self, new_pos, threshold=50):
-        """Check if detected face is approximately same position as before"""
+    def _is_same_face(self, new_pos, threshold=120):
+        """Check if detected face is approximately same position as before (increased tolerance for movement)"""
         if self.last_face_position is None:
             return False
         
@@ -301,9 +309,9 @@ class AutomatedFaceRecognitionSystem:
                     face_roi = frame[y:y+h, x:x+w]
                     blur_score = self._calculate_blur_score(face_roi)
                     
-                    if blur_score < 100:  # Too blurry
+                    if blur_score < 30:  # Only reject very blurry faces (allow shaky/moving)
                         cv2.rectangle(display_frame, (x, y), (x+w, y+h), (0, 0, 255), 2)
-                        self.current_status = "Face too blurry - hold still"
+                        self.current_status = "Face too blurry"
                         self.stable_frame_count = 0
                         self.countdown_start_time = None
                     elif w < self.min_face_size:  # Too small
@@ -414,7 +422,7 @@ class AutomatedFaceRecognitionSystem:
             self.current_status = f"Welcome {best_match.title()}! ({best_similarity:.0%} match)"
             
             # Speak the recognized name
-            speak_async(f"Welcome {best_match.title()}")
+            speak_async(best_match.title())
             
             # Check 1-week rule
             self._check_and_update_photo(best_match, temp_file, embedding)
@@ -481,7 +489,7 @@ class AutomatedFaceRecognitionSystem:
             print(f"✅ NEW FACE REGISTERED: {person_name.upper()}\n")
             
             # Speak the registration confirmation
-            speak_async(f"Hello {person_name.title()}, you have been registered")
+            speak_async(f"{person_name.title()} is registered")
             
         except Exception as e:
             print(f"✗ Error registering face: {e}")

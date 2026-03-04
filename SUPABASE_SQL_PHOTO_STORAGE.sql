@@ -276,10 +276,13 @@ VALUES (1, 'john', 0.95, 0.88, true, 0.1, true);
 -- ============================================
 -- 10. STORAGE BUCKET POLICIES (Face-Photos Bucket)
 -- ============================================
--- NOTE: Execute these after creating the storage bucket manually:
--- Storage → Create Bucket → Name: face-photos → Public ✓
+-- ⚠️ IMPORTANT: Run this section SEPARATELY after:
+-- 1. Go to Supabase Dashboard → Storage
+-- 2. Click "Create Bucket" → Name: face-photos → Mark as Public ✓
+-- 3. Then run ONLY this section below
 
--- Enable RLS for storage.objects (if bucket exists)
+-- Uncomment and run these policies AFTER creating the storage bucket:
+/*
 CREATE POLICY "Users can upload photos to their folder" ON storage.objects
   FOR INSERT TO authenticated
   WITH CHECK (
@@ -308,6 +311,7 @@ CREATE POLICY "Users can delete their photos" ON storage.objects
 CREATE POLICY "Anyone can read public photos" ON storage.objects
   FOR SELECT
   USING (bucket_id = 'face-photos');
+*/
 
 
 -- ============================================
@@ -319,11 +323,11 @@ SELECT table_name FROM information_schema.tables
 WHERE table_schema = 'public' 
 ORDER BY table_name;
 
--- Check storage bucket exists
-SELECT name, id, public FROM storage.buckets WHERE name = 'face-photos';
+-- Check storage bucket exists (run only if storage is enabled)
+-- SELECT name, id, public FROM storage.buckets WHERE name = 'face-photos';
 
--- Check storage policies
-SELECT * FROM pg_policies WHERE tablename = 'objects' AND schemaname = 'storage';
+-- Check storage policies (run only if storage is enabled)
+-- SELECT * FROM pg_policies WHERE tablename = 'objects' AND schemaname = 'storage';
 
 -- Verify face_embeddings table has vector type
 SELECT column_name, data_type 

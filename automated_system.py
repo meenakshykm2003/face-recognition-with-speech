@@ -13,6 +13,7 @@ import torch
 import numpy as np
 import os
 import threading
+import queue
 from PIL import Image
 from datetime import datetime, timedelta
 from facenet_pytorch import MTCNN, InceptionResnetV1
@@ -29,33 +30,51 @@ photo_service = PhotoService()
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 print(f"Using device: {device}")
 
-# Initialize Text-to-Speech Engine
-tts_engine = pyttsx3.init()
-tts_engine.setProperty('rate', 120)  # Slower speed of speech
-tts_engine.setProperty('volume', 0.9)  # Slightly softer volume
+# Initialize Text-to-Speech with queue to avoid conflicts
+speech_queue = queue.Queue()
+speech_lock = threading.Lock()
+
+def _speech_worker():
+    """Background worker that processes speech requests one at a time"""
+    engine = None
+    while True:
+        try:
+            text = speech_queue.get(timeout=1)
+            if text is None:  # Shutdown signal
+                break
+            
+            # Initialize engine once per speech (avoids run loop conflicts)
+            try:
+                engine = pyttsx3.init()
+                engine.setProperty('rate', 120)  # Slower, soothing pace
+                engine.setProperty('volume', 0.9)
+                
+                # Try to use a softer/female voice (Windows: Zira)
+                voices = engine.getProperty('voices')
+                for voice in voices:
+                    if 'zira' in voice.name.lower() or 'female' in voice.name.lower():
+                        engine.setProperty('voice', voice.id)
+                        break
+                
+                engine.say(text)
+                engine.runAndWait()
+                engine.stop()
+            except Exception as e:
+                print(f"Speech error: {e}")
+            
+            speech_queue.task_done()
+        except queue.Empty:
+            continue
+        except Exception as e:
+            pass
+
+# Start speech worker thread
+speech_thread = threading.Thread(target=_speech_worker, daemon=True)
+speech_thread.start()
 
 def speak_async(text):
-    """Speak text asynchronously to avoid blocking the main thread"""
-    def _speak():
-        try:
-            engine = pyttsx3.init()
-            engine.setProperty('rate', 120)  # Slower, more soothing pace
-            engine.setProperty('volume', 0.9)  # Slightly softer
-            
-            # Try to use a softer/female voice if available (Windows: Zira)
-            voices = engine.getProperty('voices')
-            for voice in voices:
-                if 'zira' in voice.name.lower() or 'female' in voice.name.lower():
-                    engine.setProperty('voice', voice.id)
-                    break
-            
-            engine.say(text)
-            engine.runAndWait()
-        except Exception as e:
-            print(f"Speech error: {e}")
-    
-    thread = threading.Thread(target=_speak, daemon=True)
-    thread.start()
+    """Queue text to be spoken asynchronously"""
+    speech_queue.put(text)
 
 # Initialize models (min_face_size=40 for detecting faces from farther away)
 detector = MTCNN(keep_all=True, select_largest=False, device=device, min_face_size=40)

@@ -12,6 +12,7 @@ import cv2
 import torch
 import numpy as np
 import os
+import threading
 from PIL import Image
 from datetime import datetime, timedelta
 from facenet_pytorch import MTCNN, InceptionResnetV1
@@ -19,6 +20,7 @@ from supabase_service import SupabaseService
 from photo_service import PhotoService
 from face_rec import get_embedding, compare_faces_with_photos
 from face_recognition_model import FaceRecognitionModel
+import pyttsx3
 
 # Initialize Services and Models
 supabase_service = SupabaseService()
@@ -26,6 +28,26 @@ photo_service = PhotoService()
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 print(f"Using device: {device}")
+
+# Initialize Text-to-Speech Engine
+tts_engine = pyttsx3.init()
+tts_engine.setProperty('rate', 150)  # Speed of speech
+tts_engine.setProperty('volume', 1.0)  # Volume (0.0 to 1.0)
+
+def speak_async(text):
+    """Speak text asynchronously to avoid blocking the main thread"""
+    def _speak():
+        try:
+            engine = pyttsx3.init()
+            engine.setProperty('rate', 150)
+            engine.setProperty('volume', 1.0)
+            engine.say(text)
+            engine.runAndWait()
+        except Exception as e:
+            print(f"Speech error: {e}")
+    
+    thread = threading.Thread(target=_speak, daemon=True)
+    thread.start()
 
 # Initialize models
 detector = MTCNN(keep_all=True, select_largest=False, device=device, min_face_size=80)
@@ -391,6 +413,9 @@ class AutomatedFaceRecognitionSystem:
             print(f"   Confidence: {best_similarity:.2%}")
             self.current_status = f"Welcome {best_match.title()}! ({best_similarity:.0%} match)"
             
+            # Speak the recognized name
+            speak_async(f"Welcome {best_match.title()}")
+            
             # Check 1-week rule
             self._check_and_update_photo(best_match, temp_file, embedding)
         else:
@@ -454,6 +479,9 @@ class AutomatedFaceRecognitionSystem:
             
             self.current_status = f"Registered: {person_name.title()}"
             print(f"✅ NEW FACE REGISTERED: {person_name.upper()}\n")
+            
+            # Speak the registration confirmation
+            speak_async(f"Hello {person_name.title()}, you have been registered")
             
         except Exception as e:
             print(f"✗ Error registering face: {e}")

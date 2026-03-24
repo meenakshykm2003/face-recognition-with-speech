@@ -1,0 +1,22 @@
+[Unit]
+Description=Smart Vision Assistance Coordinator (CM4)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/face-voice
+Environment=PYTHONUNBUFFERED=1
+Environment=OCR_SPACE_API_KEY=helloworld
+ExecStart=/usr/bin/python3 /home/pi/face-voice/main.py --module coordinated --target cm4 --components face voice currency
+Restart=always
+RestartSec=3
+KillSignal=SIGINT
+TimeoutStopSec=20
+StandardOutput=append:/var/log/smartvision.log
+StandardError=append:/var/log/smartvision.log
+
+[Install]
+WantedBy=multi-user.target
